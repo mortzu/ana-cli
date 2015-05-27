@@ -1,0 +1,141 @@
+#! /usr/bin/env python2
+# 2014, Moritz Kaspar Rudert (mortzu) <mr@planetcyborg.de>
+# All rights reserved.
+
+# Redistribution and use in source and binary forms, with or without modification, are
+# permitted provided that the following conditions are met:
+#
+# * Redistributions of source code must retain the above copyright notice, this list of
+#   conditions and the following disclaimer.
+#
+# * Redistributions in binary form must reproduce the above copyright notice, this list
+#   of conditions and the following disclaimer in the documentation and/or other materials
+#   provided with the distribution.
+#
+# * The names of its contributors may not be used to endorse or promote products derived
+#   from this software without specific prior written permission.
+#
+# * Feel free to send Club Mate to support the work.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS
+# OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY
+# AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDERS
+# AND CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
+# CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+# SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+# THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+# OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
+# POSSIBILITY OF SUCH DAMAGE.
+
+# import base stuff
+import sys
+
+# module which parses commandline arguments
+import argparse
+
+# to read interactivly passwords echo-less
+from getpass import getpass
+
+# https requests with digest auth
+import pycurl
+try:
+    from io import BytesIO
+except ImportError:
+    from io import StringIO as BytesIO
+
+# json. the name tells all
+import json
+
+# url escape
+import urllib
+
+# check for python3
+python3 = sys.version_info[0] > 2
+
+# function to print message to STDERR
+def print_error(message):
+    sys.stderr.write(str(message) + "\n")
+    sys.exit(1)
+
+# do API call
+def api_call(action, url, username, password):
+    buf = BytesIO()
+    # do the request
+    curl = pycurl.Curl()
+    curl.setopt(pycurl.URL, 'https://planetcyborg.de/api/?action=' + urllib.quote(action) + url)
+    curl.setopt(pycurl.USERPWD, "%s:%s" % (username, password))
+    curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
+    curl.setopt(pycurl.WRITEFUNCTION, buf.write)
+    curl.perform()
+    response_code = curl.getinfo(curl.RESPONSE_CODE)
+    curl.close()
+    api_content = buf.getvalue().decode('UTF-8')
+    json_content = json.loads(api_content)
+
+    # catch errors
+    if response_code == 401:
+        print_error('Invalid credentials!')
+    elif response_code == 404:
+        print_error('User not found!')
+    elif response_code != 200:
+        print_error('Something went terribly wrong!')
+
+    # return json dict
+    return json_content
+
+def main():
+    # admin variable
+    staff = False
+
+    # read username for API calls
+    sys.stdout.write('Please enter your username: ')
+    if python3:
+        api_username = input()
+    else:
+        api_username = raw_input()
+
+    # read password for API calls
+    sys.stdout.write('Please enter your password: ')
+    api_password = getpass('')
+
+    # check if username or password empty
+    if not api_username or not api_password:
+        print_error('Empty username or password!')
+
+    # do the API call
+    json_content = api_call('user', '&username=' + urllib.quote(api_username), api_username, api_password)
+
+    # lookup staff in groups array
+    if 'staff' in json_content['groups']:
+        staff = True
+
+    parser = argparse.ArgumentParser()
+
+    subparsers = parser.add_subparsers(dest = 'subparser_name', help = 'commands')
+
+    # 
+    if staff:
+        list_user_parser = subparsers.add_parser('list', help = 'Lists all users')
+
+    show_user_parser = subparsers.add_parser('show', help = 'Shows informations about given username')
+
+  Usage: scw [options] [command]
+
+
+attach
+
+login
+
+ps -a
+
+images
+
+info
+
+start
+
+stop -t
+
+create
+
+rm
