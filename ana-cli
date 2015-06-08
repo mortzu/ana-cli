@@ -58,11 +58,11 @@ def print_error(message):
     sys.exit(1)
 
 # do API call
-def api_call(action, url, username, password):
+def api_call(action, api_url, url, username, password):
     buf = BytesIO()
     # do the request
     curl = pycurl.Curl()
-    curl.setopt(pycurl.URL, 'https://planetcyborg.de/api/?action=' + urllib.quote(action) + url)
+    curl.setopt(pycurl.URL, api_url + urllib.quote(action) + url)
     curl.setopt(pycurl.USERPWD, "%s:%s" % (username, password))
     curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
     curl.setopt(pycurl.WRITEFUNCTION, buf.write)
@@ -84,58 +84,58 @@ def api_call(action, url, username, password):
     return json_content
 
 def main():
-    # admin variable
-    staff = False
-
-    # read username for API calls
-    sys.stdout.write('Please enter your username: ')
-    if python3:
-        api_username = input()
-    else:
-        api_username = raw_input()
-
-    # read password for API calls
-    sys.stdout.write('Please enter your password: ')
-    api_password = getpass('')
-
-    # check if username or password empty
-    if not api_username or not api_password:
-        print_error('Empty username or password!')
-
-    # do the API call
-    json_content = api_call('user', '&username=' + urllib.quote(api_username), api_username, api_password)
-
-    # lookup staff in groups array
-    if 'staff' in json_content['groups']:
-        staff = True
-
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers(dest = 'subparser_name', help = 'commands')
 
-    # 
-    if staff:
-        list_user_parser = subparsers.add_parser('list', help = 'Lists all users')
+    login_parser = subparsers.add_parser('login', help = '')
+    login_parser.add_argument('--name', action = 'store', help = 'Name of API connector', required = True)
+    login_parser.add_argument('--token', action = 'store', help = 'API token', required = True)
 
-    show_user_parser = subparsers.add_parser('show', help = 'Shows informations about given username')
+    domain_attach_parser = subparsers.add_parser('attach', help = 'Attach to specified domain instance')
+    domain_attach_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
-  Usage: scw [options] [command]
+    domain_create_parser = subparsers.add_parser('create', help = 'Create domain instance')
+    domain_create_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
+    domain_info_parser = subparsers.add_parser('info', help = 'Shows informations about specified domain instance')
+    domain_info_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
-attach
+    domain_ps_parser = subparsers.add_parser('ps', help = 'Lists all domain instances')
+    domain_ps_parser.add_argument('-a', action = 'store_true', help = 'Lists down instances too')
 
-login
+    domain_rm_parser = subparsers.add_parser('rm', help = 'Removes specified domain instance')
+    domain_rm_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
-ps -a
+    domain_start_parser = subparsers.add_parser('start', help = 'Starts specified domain instance')
+    domain_start_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
-images
+    domain_stop_parser = subparsers.add_parser('stop', help = 'Stops specified domain instance')
+    domain_stop_parser.add_argument('name', action = 'store', help = 'Name of instance')
+    domain_stop_parser.add_argument('-t', action = 'store_true', help = 'Terminate instance')
 
-info
+    parser.add_argument('--version', action = 'version', version = '%(prog)s 1.0')
 
-start
+    results = parser.parse_args()
 
-stop -t
+    if results.subparser_name == 'login':
+        print results.name
+        print results.token
+    elif results.subparser_name == 'attach':
+        print results.name
+    elif results.subparser_name == 'create':
+        print results.name
+    elif results.subparser_name == 'info':
+        print results.name
+    elif results.subparser_name == 'ps':
+        print results.a
+    elif results.subparser_name == 'rm':
+        print results.name
+    elif results.subparser_name == 'start':
+        print results.name
+    elif results.subparser_name == 'stop':
+        print results.name
+        print results.t
 
-create
-
-rm
+if __name__ == "__main__":
+    main()
