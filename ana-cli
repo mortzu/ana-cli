@@ -49,6 +49,12 @@ import json
 # url escape
 import urllib
 
+import texttable
+
+from xdg import BaseDirectory
+
+import yaml
+
 # check for python3
 python3 = sys.version_info[0] > 2
 
@@ -58,13 +64,11 @@ def print_error(message):
     sys.exit(1)
 
 # do API call
-def api_call(action, api_url, url, username, password):
+def api_call(api_url, action):
     buf = BytesIO()
     # do the request
     curl = pycurl.Curl()
-    curl.setopt(pycurl.URL, api_url + urllib.quote(action) + url)
-    curl.setopt(pycurl.USERPWD, "%s:%s" % (username, password))
-    curl.setopt(pycurl.HTTPAUTH, pycurl.HTTPAUTH_DIGEST)
+    curl.setopt(pycurl.URL, api_url + action)
     curl.setopt(pycurl.WRITEFUNCTION, buf.write)
     curl.perform()
     response_code = curl.getinfo(curl.RESPONSE_CODE)
@@ -84,6 +88,12 @@ def api_call(action, api_url, url, username, password):
     return json_content
 
 def main():
+#    self.configfile = os.path.join(BaseDirectory.xdg_config_home, 'ana-cli.conf')
+
+#    if os.path.isfile(self.configfile):
+#        with open("config.yml", 'r') as ymlfile:
+#    cfg = yaml.load(ymlfile)
+
     parser = argparse.ArgumentParser()
 
     subparsers = parser.add_subparsers(dest = 'subparser_name', help = 'commands')
@@ -96,13 +106,24 @@ def main():
     domain_attach_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
     domain_create_parser = subparsers.add_parser('create', help = 'Create domain instance')
-    domain_create_parser.add_argument('name', action = 'store', help = 'Name of instance')
+    domain_create_parser.add_argument('--name', action = 'store', help = 'Name of instance', required = True)
+    domain_create_parser.add_argument('--hostname', action = 'store', help = 'Container host name')
+    domain_create_parser.add_argument('-c', '--cpu-shares', action = 'store', help = 'CPU shares (relative weight)')
+    domain_create_parser.add_argument('-m', '--memory', action  = 'store', help = 'Memory limit', required = True)
+    domain_create_parser.add_argument('--swap', action = 'store', help = 'Swapspace limit')
+    domain_create_parser.add_argument('--size', action = 'store', help = 'Diskspace limit', required = True)
+
+    domain_exec_parser = subparsers.add_parser('exec', help = 'Execute command at instance')
+    domain_exec_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
     domain_info_parser = subparsers.add_parser('info', help = 'Shows informations about specified domain instance')
     domain_info_parser.add_argument('name', action = 'store', help = 'Name of instance')
 
     domain_ps_parser = subparsers.add_parser('ps', help = 'Lists all domain instances')
     domain_ps_parser.add_argument('-a', action = 'store_true', help = 'Lists down instances too')
+
+    domain_restart_parser = subparsers.add_parser('restart', help = 'Restarts domain instance gracefully')
+    domain_restart_parser.add_argument('-t', '--term', action = 'store_true', help = 'Resets domain instance')
 
     domain_rm_parser = subparsers.add_parser('rm', help = 'Removes specified domain instance')
     domain_rm_parser.add_argument('name', action = 'store', help = 'Name of instance')
@@ -112,7 +133,7 @@ def main():
 
     domain_stop_parser = subparsers.add_parser('stop', help = 'Stops specified domain instance')
     domain_stop_parser.add_argument('name', action = 'store', help = 'Name of instance')
-    domain_stop_parser.add_argument('-t', action = 'store_true', help = 'Terminate instance')
+    domain_stop_parser.add_argument('-t', '--term', action = 'store_true', help = 'Terminate instance')
 
     parser.add_argument('--version', action = 'version', version = '%(prog)s 1.0')
 
@@ -121,21 +142,42 @@ def main():
     if results.subparser_name == 'login':
         print results.name
         print results.token
+
     elif results.subparser_name == 'attach':
         print results.name
+
     elif results.subparser_name == 'create':
         print results.name
+
     elif results.subparser_name == 'info':
         print results.name
+
     elif results.subparser_name == 'ps':
-        print results.a
+        table = texttable.Texttable()
+        table.set_deco(texttable.Texttable.HEADER)
+        header = ["NAME", "HOST", "STATUS"]
+        table.header(header)
+
+        json = api_call('https://admin.open.tf/api.php?token=ooqu4rahsh5aeZ5d', '&action=get_domains')
+        for hostname, domains in json.iteritems():
+            for domainname, domain in domains.iteritems():
+                if domain['state'] == True or results.a == True:
+                    table.add_row([domainname, hostname, str(domain['state'])])
+        print table.draw()
+
     elif results.subparser_name == 'rm':
         print results.name
+
     elif results.subparser_name == 'start':
-        print results.name
+        json = api_call('https://admin.open.tf/api.php?token=', '&action=domain_start&name=' + results.name);
+        print json
+
     elif results.subparser_name == 'stop':
-        print results.name
-        print results.t
+        if results.t == True:
+            json = api_call('https://admin.open.tf/api.php?token=', '&action=domain_stop&name=' + results.name);
+        else:
+            json = api_call('https://admin.open.tf/api.php?token=', '&action=domain_shutdown&name= ' + results.name);
+        print json
 
 if __name__ == "__main__":
     main()
