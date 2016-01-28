@@ -1,0 +1,111 @@
+#! /usr/bin/env bash
+
+# Configuration directory
+if [ "$(id -n -u)" = 'root' ]; then
+  INSTANCE_CONFIG_DIR='/etc/ana'
+else
+  INSTANCE_CONFIG_DIR='~/.config/ana'
+fi
+
+# Default values
+INSTANCE_TOKEN_FILE="${INSTANCE_CONFIG_DIR}/token"
+INSTANCE_TOKEN=''
+INSTANCE_URL_FILE="${INSTANCE_CONFIG_DIR}/url"
+INSTANCE_URL='http://localhost:65535/'
+
+# Help functions
+show_help() {
+  echo "Anastasia CLI"
+  echo "usage: $(basename $0)"
+  echo
+  echo -e "start <domain>"
+  echo -e "\tStarts a virtual machine / container"
+  echo
+  echo -e "stop <domain>"
+  echo -e "\tStops a virtual machine / container"
+  echo
+  echo -e "shutdown <domain>"
+  echo -e "\tGraceful shutdowns a virtual machine / container"
+  echo
+  echo -e "restart <domain>"
+  echo -e "\tRestarts a virtual machine / container"
+  echo
+  echo -e "reboot <domain>"
+  echo -e "\tReboots a virtual machine / container"
+
+  exit 1
+}
+
+# Error function if API token is not set
+api_token_not_set() {
+  echo "Please enter your API token in ${INSTANCE_TOKEN_FILE}:" >&2
+  echo "cat > ${INSTANCE_TOKEN_FILE} <<__EOF__" >&2
+  echo "<your API key here>" >&2
+  echo "__EOF__" >&2
+
+  exit 1
+}
+
+# Fetch URL and API token
+if [ ! -d "$(dirname ${INSTANCE_TOKEN_FILE})" ]; then
+  mkdir -p "$(dirname ${INSTANCE_TOKEN_FILE})"
+fi
+
+if [ ! -f "$INSTANCE_TOKEN_FILE" ]; then
+  api_token_not_set
+else
+  INSTANCE_TOKEN="$(<${INSTANCE_TOKEN_FILE})"
+fi
+
+if [ -z "$INSTANCE_TOKEN" ]; then
+  api_token_not_set
+fi
+
+if [ -f "$INSTANCE_URL_FILE" ]; then
+  INSTANCE_URL="$(<${INSTANCE_URL_FILE})"
+fi
+
+# If first argument is missing
+# show help
+if [ "$1" = '--help' -o "$1" = '-h' ]; then
+  show_help
+fi
+
+# Show virtual machines / containers
+if [ -z "$1" -o "$1" = 'ps' ]; then
+  # Create temporary file
+  TMP_FILE="$(mktemp)"
+
+  # Get list of virtual machines / containers
+  curl --header "API-KEY: ${INSTANCE_TOKEN}" -s "$INSTANCE_URL" > "$TMP_FILE"
+
+  printf " %-35s %-10s %-15s %-10s\n" "NAME" "STATE" "UNPRIVILEGED" "MEMORY"
+  echo $(printf '=%.0s' {1..71})
+
+  for KEY in $(jq '.[] | .name' < "$TMP_FILE"); do
+    if [ "$KEY" = '[]' ]; then
+      continue
+    fi
+
+    NAME="$(jq ".[${KEY}] | .[\"name\"]" < "$TMP_FILE" | sed -e 's/"//g')"
+    STATE="$(jq ".[${KEY}] | .[\"state\"]" < "$TMP_FILE" | sed -e 's/"//g')"
+    UNPRIVILEGED="$(jq ".[${KEY}] | .[\"unprivileged\"]" < "$TMP_FILE" | sed -e 's/"//g')"
+    MEMORY="$(numfmt --from=iec --to=iec --suffix=B $(jq ".[${KEY}] | .[\"memory\"]" < "$TMP_FILE" | sed -e 's/"//g')K)"
+
+    printf " %-35s %-10s %-15s %-10s\n" "$NAME" "$STATE" "$UNPRIVILEGED" "$MEMORY"
+  done
+
+  # Remove temporary file
+  if [ -e "$TMP_FILE" ]; then
+    rm "$TMP_FILE"
+  fi
+elif [ "$1" = 'start' -o "$1" = 'stop' -o "$1" = 'shutdown' -o "$1" = 'restart' -o "$1" = 'reboot' ]; then
+  if [ -z "$2" ]; then
+    show_help
+  fi
+
+  # Fire request
+  curl -X POST --header "API-KEY: ${INSTANCE_TOKEN}" -s "${INSTANCE_URL}/$1/$2"
+else
+  show_help
+fi
